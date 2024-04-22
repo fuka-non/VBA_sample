@@ -151,7 +151,7 @@ Private Sub dataCopy()
         
                     '****************** 別途出力
                     
-         '商品名カナのセルを検索して格納
+         '商品のセルを検索して格納
        '× Set out_col_address = out_col_rng.Find(What:="商品", LookIn:=xlValues, LookAt:=xlWhole)
 
 '            ==================================================================
@@ -186,7 +186,7 @@ Private Sub dataCopy()
 End Sub
 
 'ボタン割当用
-Sub 深井ボタン()
+Sub 呼出し()
 
     Call dataCopy
     
