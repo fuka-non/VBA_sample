@@ -1,0 +1,237 @@
+'メイン処理
+Private Sub dataCopy()
+
+    Application.ScreenUpdating = False
+
+    '※今回はPCスペックも考慮して、列ごとに抽出/出力していきます※
+
+    Dim inws As Worksheet   '抽出シート用
+    Set inws = Worksheets("見積書")
+    
+    
+    '============================================= 下準備
+    
+    '★下準備：見積書シート編
+    
+    Dim in_col_address As Range   '見積書シートの見出し列があるセル行の取得用
+    
+    
+    'A列、表の先頭行　セル番地を格納
+    Set in_col_address = inws.Cells(1, 1).End(xlDown) 
+        
+
+    Dim lastRow As Long '最終行用
+        lastRow = inws.Cells(Rows.Count, 1).End(xlUp).Row   '見積書、最終行格納
+        
+    Dim in_lastCol As Integer '見積書、最終列用
+        in_lastCol = inws.Cells(in_col_address.Row, Columns.Count).End(xlToLeft).Column   '見積書、最終列格納
+    
+    
+    
+    Dim item As Integer '配列の要素数用
+        item = lastRow - in_col_address.Row
+    
+    
+    Dim col_data() As Variant   '列の行データ取得用配列　可変長で宣言
+    
+    '配列の初期化　col_data(item行分)
+    ReDim col_data(item)
+
+    
+         '※メモ：　Dim col_data(item) As Variant での宣言だとエラー吐く    融通効かなくてオコ
+        
+        
+        
+    '★下準備：出力シート編
+    
+    Dim outws As Worksheet  '出力シート用
+    Set outws = Worksheets("出力")
+    
+    Dim out_col_address As Range '出力シート列セル番地検索用
+    Set out_col_address = outws.Cells(1, 1).End(xlDown) 
+   
+    Dim out_lastCol As Integer '出力シート最終列用
+    
+    '出力シート最終列の取得
+    out_lastCol = outws.Cells(out_col_address.Row, Columns.Count).End(xlToLeft).Column 
+    
+    
+    '出力用シートをアクティブ化しておく
+    outws.Activate
+    
+    
+    '出力シートの見出し列範囲を格納する
+    Dim out_col_rng As Range
+    
+                     '長いコードはアンダーバーで改行できる
+    Set out_col_rng = _
+        outws.Range(Cells(out_col_address.Row, out_col_address.Column), Cells(out_col_address.Row, out_lastCol))
+    
+    '出力列番地参照を空に
+    Set out_col_address = Nothing
+    
+     '============================================= データ転記処理
+    
+    
+    '見積書シートの左から順に列毎にデータを抽出（配列へ格納）し、出力用シートへ書き込んでいく
+    
+    Dim i As Integer
+    Dim j As Integer  'カウンタ用
+    
+    Dim col_str As String '見出し列名用
+    
+        '抽出列分回す
+        For i = in_col_address.Column To in_lastCol
+        
+            col_str = inws.Cells(in_col_address.Row, i).Value   '見積書の見出し文字列格納
+            
+                '抽出文字が以下ならば、出力シート用に見出し文字列を合わせる
+                If col_str = "名" Then
+                    col_str = "メーカー"
+                
+                ElseIf col_str = "商品" Then
+                    col_str = "商品名"
+                
+                End If
+                
+
+            '配列(col_data)に見積書シートの見出し列に該当する行データ格納
+            For j = 1 To item   
+                 col_data(j) = inws.Cells(in_col_address.Row + j, i).Value
+            Next j
+            
+            
+            '****************** データ出力
+                        
+            
+         '出力シート range範囲から、見積書シートから抽出した列見出し文字列を検索、セル番地格納
+ '        ×　Set out_col_address = out_col_rng.Find(What:=col_str, LookIn:=xlValues, LookAt:=xlWhole)
+   
+ '           ==================================================================
+           '>>>変更点：Findメソッドは処理が遅くバグが多いらしいので、セル検索用メソッド(関数)を自作して代用
+           
+         '作成したメソッドに引数を渡して戻り値を格納　引数：(検索させたいrange範囲、検索したい文字列、検索条件(完全一致))
+          Set out_col_address = out_col_Search(out_col_rng, col_str, True)
+          
+            '検索結果なしだった場合の処理
+                If out_col_address Is Nothing Then
+                    MsgBox "出力シートの見出し列に「" & col_str & "」が見つかりませんでした。" + vbCrLf + "出力シートの見出し列文字と一致しているか確認してください"
+                    Exit Sub '処理を中止する
+                End If
+ '           ==================================================================
+            
+            For j = 1 To item
+                
+                '出力シート、検索されたセル　+１の行から配列要素を連続出力していく
+                
+                '入数の列出力であれば、計算して出力させる
+                If col_str <> "入数" Then
+                
+                    'ただの出力のみ
+                    outws.Cells(out_col_address.Row + j, out_col_address.Column).Value = col_data(j)
+                
+                Else
+                    '入数の列出力時
+                    
+                        '変換出力
+                        outws.Cells(out_col_address.Row + j, out_col_address.Column).Value = inws.Evaluate(col_data(j))
+                        
+                             'メモ：Evaluateメソッドは「引数の参照先」を見に行くため、この処理でのcol_dataはvariant型、つまり文字列ではなくrangeの情報が入っている
+                             '参照先（変換したい値の情報先）が正しく指定されていないとエラーになる
+                    
+                End If
+            
+            Next j
+            
+        '検索用セル番地を都度空にする
+         Set out_col_address = Nothing
+        
+        Next i
+        
+        
+                    '****************** 別途出力
+                    
+         '商品名カナのセルを検索して格納
+       '× Set out_col_address = out_col_rng.Find(What:="商品", LookIn:=xlValues, LookAt:=xlWhole)
+
+'            ==================================================================
+           '>>>変更点：同上の理由
+           
+         '検索させたいrange範囲、検索したい文字列、検索条件(完全一致)で引数を渡す
+          Set out_col_address = out_col_Search(out_col_rng, "商品", True)
+          
+            '検索結果なしだった場合の処理
+                If out_col_address Is Nothing Then
+                    MsgBox "出力シートの「商品列」が見つかりませんでした。"
+                    Exit Sub '処理を中止する
+                End If
+ '           ==================================================================
+            
+            For j = 1 To item
+            
+                outws.Cells(out_col_address.Row + j, out_col_address.Column).Value = _
+                    StrConv(Application.GetPhonetic(outws.Cells(out_col_address.Row + j, out_col_address.Column - 1).Value), vbNarrow)  '商品名列
+
+            Next j
+                
+
+    '参照先を解放
+    Erase col_data
+    Set inws = Nothing
+    Set outws = Nothing
+    Set in_col_address = Nothing
+    Set out_col_address = Nothing
+    Set out_col_rng = Nothing
+
+End Sub
+
+'ボタン割当用
+Sub 深井ボタン()
+
+    Call dataCopy
+    
+End Sub
+
+'表リセット用
+Sub allReset()
+
+    Worksheets("出力").Activate
+    
+    Range("A4:D12,F4:F12,I4:T12").ClearContents
+    
+End Sub
+
+'出力セル番地検索用関数　戻り値：range
+Function out_col_Search(ByVal rng As Range, ByVal keyWord As String, ByVal whole As Boolean) As Range
+
+    
+    '★引数でわたってきたrange範囲から、
+    '　引数でわたってきたkeyWord(文字列)とセルの値が一致するか１つずつ照合する処理
+    '　一致セルがあれば、そのセル番地を返す
+    
+     Dim r As Range  'for用
+       
+    'keyWord完全一致検索
+    If whole Then
+        For Each r In rng
+            If r.Value = keyWord Then
+            '見つかったらループを抜けメイン処理に戻る
+                Set out_col_Search = r      '関数名 = 戻り値(この関数ではrangeを返す)
+                Exit Function
+            End If
+        Next
+    
+    'keyWord部分一致
+    Else
+        For Each r In rng
+            If InStr(r.Value, keyWord) > 0 Then
+                Set out_col_Search = r
+                Exit Function
+            End If
+        Next
+    End If
+    
+    '見つからなかった場合、結果なしで返す
+    Set out_col_Search = Nothing
+
+End Function
