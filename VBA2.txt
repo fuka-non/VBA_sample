@@ -1,0 +1,161 @@
+Sub storeFileter()
+
+    '処理速度計測用
+    Dim start_time As Double
+    start_time = Timer
+
+'チラつき防止
+Application.ScreenUpdating = False
+
+    Dim tWb As Workbook
+    
+    'このワークブックを格納
+    Set tWb = ThisWorkbook
+    
+    '事故(エラー)防止に操作用のシートを先頭にしておく
+    tWb.Worksheets("操作用").Move Before:=tWb.Worksheets(1)
+    
+    
+    '最終行格納用
+    Dim r As Long
+        
+        'D列(店舗名列)、最終行を格納
+        r = tWb.Worksheets(1).Cells(Rows.Count, 4).End(xlUp).Row
+    
+    '店舗名の範囲格納用
+    Dim storeRng As Range
+    
+    '操作用シートの店舗名、D列の 2行目～最終行 で範囲を格納
+    Set storeRng = tWb.Worksheets(1).Range(Cells(2, 4), Cells(r, 4))
+    
+    '店舗名,コードの格納用
+    Dim storeName As String
+    Dim storeCode As String
+    
+    
+    '＝＝＝＝＝＝＝＝＝＝＝＝＝　店舗名範囲を１つずつ回していく
+    
+    Dim i As Integer        'カウンタ用
+    Dim tWs As Worksheet    '操作用ブックのシート用
+
+    Dim store As Variant  'each用
+    Dim d As Variant
+   
+    Dim dataRng As Range  'データ範囲取得用
+    
+    Dim newBk As Workbook
+    
+    
+        
+    For Each store In storeRng
+    
+        tWb.Worksheets(1).Activate
+    
+        '店舗名、コードを格納
+        storeName = store.Value
+        storeCode = store.Offset(0, -1).Value
+        
+        '書き込むための新規ブックを追加
+        Set newBk = Workbooks.Add
+                    
+                    
+        '＝＝＝＝＝＝＝＝＝＝＝＝＝　各シートのデータを転記していく
+        For i = 2 To tWb.Sheets.Count
+        
+            Set tWs = tWb.Worksheets(i)
+        
+            'newBkに転記したシートが1枚(i=2)以上なら、newBkに新規シート追加
+            If i > 2 Then newBk.Worksheets.Add After:=newBk.Sheets(newBk.Sheets.Count)
+
+                'データ抽出するシートのアクティブ化
+                tWs.Activate
+            
+            '★ ************ フィルター処理
+            'メインbookのシート(i),range(データ範囲) / Field:=２列目(店舗名列)に,Criteria1:=店舗名でフィルターをかける
+            'Operator:=xlFilterValues は、「セルの値を表示」指定。他にも、色付きセル、数式セルのみ表示、なども指定できる。特にこだわらない場合は、記述を省略してもよい
+            tWs.Range("A1").AutoFilter Field:=2, Criteria1:=storeName, Operator:=xlFilterValues
+                        
+            'フィルター後のデータ範囲を格納する
+            Set dataRng = getData()
+                        
+            
+            ' ******** 転記処理
+            For Each d In dataRng
+            
+                newBk.Worksheets(newBk.Sheets.Count).Cells(d.Row + 3, d.Column - 2).Value _
+                        = d.Value
+            
+            Next d
+            
+            
+            With newBk.Worksheets(newBk.Sheets.Count)
+            
+                .Activate
+                                                
+                .Cells(1, 2).Select
+            
+                '新規ブックのシート名変更
+                .Name = tWs.Name
+            
+                '新規ブックB1セルに コード + 店舗名
+                .Cells(1, 2).Value = storeCode & storeName
+                .Cells(1, 1).Value = "店舗名"
+                
+                '列幅調整
+                .Columns("A:C").AutoFit
+                    
+            End With
+                               
+            '範囲選択、フィルターを解除
+            Application.CutCopyMode = False
+            'データフィルターを解除
+            tWs.Range("A1").AutoFilter
+
+            'シート、データ範囲の参照を空に
+            Set tWs = Nothing
+            Set dataRng = Nothing
+                
+        Next i
+        
+        '新規ブックを該当名で保存する
+        Application.DisplayAlerts = False
+        newBk.SaveAs tWb.Path & "\" & storeName & ".xlsx"
+        newBk.Close
+        
+        '新規ブック参照を空に
+        Set newBk = Nothing
+    
+    Next store
+        
+        '表示画面を始めの状態に戻す
+        tWb.Worksheets("操作用").Activate
+    
+    Set tWb = Nothing
+    Set storeRng = Nothing
+    
+        Debug.Print Int(Timer - start_time) Mod 60 & "秒" _
+         ; Int(100 * ((Timer - start_time) - Int(Timer - start_time)))
+    
+    MsgBox "処理が完了しました。", vbInformation
+
+End Sub
+
+==================================================================
+
+'フィルター後のデータ範囲を返す関数
+Function getData() As Range
+
+    Dim r As Long
+    Dim c As Long
+    
+    'アクティブシート(データシート)、B列(店舗名列)、最終行を格納
+    r = ActiveSheet.Cells(Rows.Count, 2).End(xlUp).Row
+    
+    '同上シート、1行目(表の開始行)、最終列を格納
+    c = ActiveSheet.Cells(1, Columns.Count).End(xlToLeft).Column
+    
+    'データ範囲を返す
+    Set getData = ActiveSheet.Range(Cells(1, 3), Cells(r, c))
+
+End Function
+
